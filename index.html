@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Five Nights At Capybara</title>
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; background: #000; color: white; font-family: 'Courier New', monospace; overflow: hidden; height: 100vh; }
+        
+        /* MENU ESTILO FNAF */
+        #main-menu { position: fixed; inset: 0; z-index: 1000; background: #000; display: flex; flex-direction: column; justify-content: center; padding-left: 10%; }
+        #menu-bg { position: absolute; right: 0; height: 100%; z-index: -1; filter: brightness(0.4); }
+        .menu-title { font-size: 50px; color: #fff; margin: 0; text-shadow: 2px 2px #f00; line-height: 0.9; }
+        .menu-btn { background: none; border: none; color: #fff; font-size: 24px; text-align: left; padding: 10px 0; cursor: pointer; display: block; }
+        .menu-btn:hover { color: #f00; padding-left: 10px; }
+        .static { position: absolute; inset: 0; background: url('https://upload.wikimedia.org/wikipedia/commons/b/b1/White_noise_on_a_television_screen.gif'); opacity: 0.1; pointer-events: none; z-index: 1001; }
+
+        /* UI JUEGO */
+        #hud { height: 10%; padding: 10px; display: flex; justify-content: space-between; align-items: center; background: #050505; border-bottom: 2px solid #333; }
+        #screen { height: 50%; position: relative; background: #000; display: flex; justify-content: center; align-items: flex-end; overflow: hidden; }
+        #controls { height: 40%; display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 10px; }
+
+        .anim { position: absolute; height: 90%; width: auto; display: none; bottom: 0; z-index: 10; filter: brightness(0); }
+        .light-on { filter: brightness(1.2) !important; }
+        .blink { animation: blink-anim 0.2s infinite; }
+        @keyframes blink-anim { 0%, 45% { opacity: 1; } 50%, 95% { opacity: 0; } }
+
+        /* GOLDEN CAPYBARA */
+        #golden { z-index: 20; height: 70%; filter: brightness(1); bottom: 10%; }
+
+        .btn { background: #1a1a1a; border: 2px solid #444; color: #fff; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-weight: bold; }
+        .active { background: #800 !important; border-color: red; }
+
+        /* VICTORIA Y SUSTOS */
+        #victory { position: fixed; inset: 0; background: #000; z-index: 2000; display: none; align-items: center; justify-content: center; font-size: 60px; }
+        #jumpscare-ui { position: fixed; inset: 0; z-index: 3000; display: none; background: #000; justify-content: center; align-items: center; }
+        #scare-img { height: 130%; animation: shake 0.05s infinite; }
+    </style>
+</head>
+<body>
+
+    <audio id="s_music" src="https://files.catbox.moe/4vwdme" preload="auto"></audio>
+    <div class="static"></div>
+
+    <div id="main-menu">
+        <img id="menu-bg" class="blink" src="https://http2.mlstatic.com/D_NQ_NP_698983-MLV83096028544_032025-O.webp">
+        <h1 class="menu-title">Five<br>Nights<br>At<br>Capybara</h1>
+        <br>
+        <button class="menu-btn" onclick="start()">New Game</button>
+        <button class="menu-btn" onclick="start()">Night 1</button>
+    </div>
+
+    <div id="victory">5 AM</div>
+
+    <div id="jumpscare-ui">
+        <img id="scare-img" src="">
+        <img id="job-card" style="position:absolute; width:250px; display:none; border:5px solid white; transform: rotate(-10deg);" src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRZIjch8ag3LfMixmJZdl7dArIXhXlZqjHwSFrzbgb6g3mxwHMUdvylykc&s">
+    </div>
+
+    <div id="hud">
+        <div>BAT: <span id="p-val">100</span>%</div>
+        <div id="t-val">12 AM</div>
+    </div>
+
+    <div id="screen">
+        <img id="capybara-img" class="anim" src="https://http2.mlstatic.com/D_NQ_NP_698983-MLV83096028544_032025-O.webp">
+        <img id="bonnie-img" class="anim" src="https://i.ibb.co/W7GG9PF/IMG-20251218-130013.png">
+        <img id="chica-img" class="anim" src="https://i.ibb.co/gFRcJwp7/IMG-20251218-130121.png">
+        <img id="golden" class="anim" src="https://i.ibb.co/v6WfvcY8/golden-capy.png">
+    </div>
+
+    <div id="controls">
+        <div class="btn" onclick="setCam(1)">CAM 1</div>
+        <div class="btn" onclick="setCam(2)">CAM 2</div>
+        <div class="btn" onclick="setCam(3)">CAM 3</div>
+        <div class="btn" id="l-btn" onclick="lightOn()">LIGHT</div>
+        <div class="btn" id="d-btn" style="grid-column: span 2;" onclick="doorToggle()">CLOSE DOOR</div>
+    </div>
+
+    <script>
+        let pow = 100, hour = 0, cam = 1, door = false, light = false, run = false;
+        let pos = { a: 1, b: 1, c: 1 };
+        const snd = document.getElementById('s_music');
+
+        function start() {
+            document.getElementById('main-menu').style.display = 'none';
+            run = true;
+            gameLoop();
+        }
+
+        function doorToggle() { door = !door; document.getElementById('d-btn').classList.toggle('active', door); }
+        function lightOn() { light = !light; document.getElementById('l-btn').classList.toggle('active', light); update(); }
+        
+        function setCam(n) { 
+            cam = n; 
+            // Posibilidad de Golden Capybara al bajar/subir cámaras
+            if(Math.random() < 0.05) document.getElementById('golden').style.display = 'block';
+            update(); 
+        }
+
+        function update() {
+            if(!run) return;
+            const c = document.getElementById('capybara-img'), b = document.getElementById('bonnie-img'), ch = document.getElementById('chica-img');
+            c.style.display = (pos.a === cam) ? "block" : "none";
+            b.style.display = (pos.b === cam) ? "block" : "none";
+            ch.style.display = (pos.c === cam) ? "block" : "none";
+            
+            let lit = (cam !== 3 || light);
+            [c, b, ch].forEach(i => lit ? i.classList.add('light-on') : i.classList.remove('light-on'));
+        }
+
+        function gameLoop() {
+            if(!run) return;
+            
+            pow -= (0.15 + (door?0.5:0));
+            document.getElementById('p-val').innerText = Math.max(0, Math.floor(pow));
+            if(pow <= 0) triggerScare('capybara', false);
+
+            // Reloj
+            setTimeout(() => {
+                hour++;
+                if(hour === 6) { win(); return; }
+                document.getElementById('t-val').innerText = hour + " AM";
+                gameLoop();
+            }, 15000); // 15 seg por hora
+
+            // IA
+            if(Math.random() > 0.8) pos.a = Math.min(3, pos.a + 1);
+            if(pos.a === 3 && !door) triggerScare('capybara', false);
+            update();
+        }
+
+        function win() {
+            run = false;
+            const v = document.getElementById('victory');
+            v.style.display = 'flex';
+            setTimeout(() => { v.innerText = "6 AM"; v.style.color = "#0f0"; }, 2000);
+            setTimeout(() => location.reload(), 7000);
+        }
+
+        function triggerScare(char, card) {
+            run = false;
+            snd.play();
+            const img = document.getElementById(char === 'golden' ? 'golden' : char+'-img');
+            img.style.display = 'block';
+            img.className = 'anim blink light-on';
+            
+            setTimeout(() => {
+                document.getElementById('jumpscare-ui').style.display = 'flex';
+                document.getElementById('scare-img').src = img.src;
+                if(card) document.getElementById('job-card').style.display = 'block';
+                if(char === 'golden') document.getElementById('jumpscare-ui').style.background = 'yellow';
+                setTimeout(() => location.reload(), 4000);
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
